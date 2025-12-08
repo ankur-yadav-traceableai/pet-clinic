@@ -477,7 +477,14 @@ pipeline {
     post {
         always {
             // Clean up workspace
-            cleanWs()
+            script {
+                try {
+                    // Use core Jenkins step to cleanup when 'cleanWs' is unavailable
+                    deleteDir()
+                } catch (e) {
+                    echo "Workspace cleanup skipped: ${e.message}"
+                }
+            }
             
             // Send notifications
             script {
