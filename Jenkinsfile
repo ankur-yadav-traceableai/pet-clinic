@@ -62,6 +62,18 @@ pipeline {
             description: 'Generate API documentation'
         )
         
+        // Notifications
+        booleanParam(
+            name: 'DISABLE_NOTIFICATIONS',
+            defaultValue: false,
+            description: 'Disable post-build notifications (e.g., Slack)'
+        )
+        string(
+            name: 'SLACK_CHANNEL',
+            defaultValue: '#builds',
+            description: 'Slack channel to send notifications (e.g., #builds). Leave blank to use Jenkins default.'
+        )
+        
         // Advanced options
         booleanParam(
             name: 'PARALLEL_BUILD',
@@ -576,17 +588,24 @@ pipeline {
                     color = 'warning'
                 }
                 
-                // Send Slack notification (guarded if plugin is not installed)
-                try {
-                    slackSend(
-                        color: color,
-                        message: "Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
-                                 "Branch: ${env.GIT_BRANCH}\n" +
-                                 "Commit: ${env.GIT_COMMIT.take(8)}\n" +
-                                 "More info at: ${env.BUILD_URL}"
-                    )
-                } catch (ignored) {
-                    echo 'Slack plugin not available; skipping Slack notification.'
+                // Send Slack notification unless disabled (and guard if plugin is not installed)
+                if (!params.DISABLE_NOTIFICATIONS) {
+                    try {
+                        def slackMsg = "Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
+                                       "Branch: ${env.GIT_BRANCH}\n" +
+                                       "Commit: ${env.GIT_COMMIT.take(8)}\n" +
+                                       "More info at: ${env.BUILD_URL}"
+                        if (params.SLACK_CHANNEL?.trim()) {
+                            slackSend(channel: params.SLACK_CHANNEL, color: color, message: slackMsg)
+                        } else {
+                            // Use default Jenkins Slack channel if configured
+                            slackSend(color: color, message: slackMsg)
+                        }
+                    } catch (ignored) {
+                        echo 'Slack plugin not available; skipping Slack notification.'
+                    }
+                } else {
+                    echo 'Notifications are disabled by parameter.'
                 }
                 
                 // Archive test results
