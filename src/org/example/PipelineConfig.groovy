@@ -107,7 +107,7 @@ class PipelineConfig implements Serializable {
         onSuccess: true,
         onFailure: true,
         onUnstable: true,
-        channels: ['email', 'slack'],
+        channels: ['console'],
         email: [
             recipients: 'team@example.com',
             sendToIndividuals: false
