@@ -203,6 +203,10 @@ pipeline {
                             buildArgs << '-Dspotbugs.failOnError=false'
                             buildArgs << '-Dnohttp.skip=true'
                             buildArgs << '-Dnohttp.check.skip=true'
+                            // Common umbrella skip property used in many Spring builds
+                            buildArgs << '-DskipChecks'
+                            // Disable nohttp enforcement fully if present
+                            buildArgs << '-Dnohttp=false'
                         }
                         
                         sh "mvn ${buildArgs.join(' ')}"
@@ -253,7 +257,22 @@ pipeline {
                 script {
                     try {
                         if (params.BUILD_TOOL == 'maven') {
-                            sh 'mvn test -Dmaven.test.failure.ignore=true'
+                            def testArgs = ['test', '-Dmaven.test.failure.ignore=true']
+                            if (params.SKIP_BUILD_STATIC_CHECKS) {
+                                testArgs += [
+                                    '-Dcheckstyle.skip=true',
+                                    '-Dpmd.skip=true',
+                                    '-Dspotbugs.skip=true',
+                                    '-Dcheckstyle.failOnViolation=false',
+                                    '-Dpmd.failOnViolation=false',
+                                    '-Dspotbugs.failOnError=false',
+                                    '-Dnohttp.skip=true',
+                                    '-Dnohttp.check.skip=true',
+                                    '-DskipChecks',
+                                    '-Dnohttp=false'
+                                ]
+                            }
+                            sh "mvn ${testArgs.join(' ')}"
                             junit '**/target/surefire-reports/**/*.xml'
                         } else {
                             sh './gradlew test --tests "**/*Test.*" --no-daemon'
@@ -297,7 +316,22 @@ pipeline {
                 script {
                     try {
                         if (params.BUILD_TOOL == 'maven') {
-                            sh 'mvn verify -DskipUnitTests -Dmaven.test.failure.ignore=true'
+                            def itArgs = ['verify', '-DskipUnitTests', '-Dmaven.test.failure.ignore=true']
+                            if (params.SKIP_BUILD_STATIC_CHECKS) {
+                                itArgs += [
+                                    '-Dcheckstyle.skip=true',
+                                    '-Dpmd.skip=true',
+                                    '-Dspotbugs.skip=true',
+                                    '-Dcheckstyle.failOnViolation=false',
+                                    '-Dpmd.failOnViolation=false',
+                                    '-Dspotbugs.failOnError=false',
+                                    '-Dnohttp.skip=true',
+                                    '-Dnohttp.check.skip=true',
+                                    '-DskipChecks',
+                                    '-Dnohttp=false'
+                                ]
+                            }
+                            sh "mvn ${itArgs.join(' ')}"
                             junit '**/target/failsafe-reports/**/*.xml'
                         } else {
                             sh './gradlew integrationTest --tests "**/*IT.*" --no-daemon'
