@@ -611,8 +611,7 @@ pipeline {
                 // Archive test results
                 junit allowEmptyResults: true, testResults: '**/surefire-reports/*.xml,**/failsafe-reports/*.xml,**/test-results/test/*.xml'
                 
-                // Archive artifacts
-                archiveArtifacts artifacts: '**/target/*.jar,**/build/libs/*.jar', allowEmptyArchive: true
+
             }
         }
         
