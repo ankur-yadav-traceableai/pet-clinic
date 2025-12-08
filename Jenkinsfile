@@ -290,17 +290,25 @@ pipeline {
                     script {
                         if (params.BUILD_TOOL == 'maven') {
                             if (fileExists('pom.xml') && fileExists('target/site/jacoco/jacoco.xml')) {
-                                jacoco execPattern: '**/target/jacoco.exec', 
-                                      classPattern: '**/target/classes', 
-                                      sourcePattern: '**/src/main/java',
-                                      exclusionPattern: '**/target/generated-sources/**'
+                                try {
+                                    jacoco execPattern: '**/target/jacoco.exec', 
+                                           classPattern: '**/target/classes', 
+                                           sourcePattern: '**/src/main/java',
+                                           exclusionPattern: '**/target/generated-sources/**'
+                                } catch (ignored) {
+                                    echo 'JaCoCo plugin not available; skipping coverage publish for Maven.'
+                                }
                             }
                         } else {
                             if (fileExists('build/reports/jacoco/test/jacocoTestReport.xml')) {
-                                jacoco execPattern: '**/build/jacoco/test.exec', 
-                                      classPattern: '**/build/classes', 
-                                      sourcePattern: '**/src/main/java',
-                                      exclusionPattern: '**/build/generated/sources/**'
+                                try {
+                                    jacoco execPattern: '**/build/jacoco/test.exec', 
+                                           classPattern: '**/build/classes', 
+                                           sourcePattern: '**/src/main/java',
+                                           exclusionPattern: '**/build/generated/sources/**'
+                                } catch (ignored) {
+                                    echo 'JaCoCo plugin not available; skipping coverage publish for Gradle.'
+                                }
                             }
                         }
                     }
