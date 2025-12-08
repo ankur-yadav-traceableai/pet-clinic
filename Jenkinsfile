@@ -85,10 +85,6 @@ pipeline {
         
         // Build configuration
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository -Dmaven.test.failure.ignore=true'
-        
-        // Tools configuration
-        JAVA_HOME = '/usr/local/openjdk-17'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
     
     options {
@@ -102,6 +98,22 @@ pipeline {
         stage('Initialize') {
             steps {
                 script {
+                    // Ensure JAVA_HOME is set correctly on this agent
+                    try {
+                        if (!env.JAVA_HOME || !fileExists("${env.JAVA_HOME}/bin/java")) {
+                            def javaBin = sh(script: 'which java', returnStdout: true).trim()
+                            if (javaBin) {
+                                // JAVA_HOME is the parent directory of bin
+                                def javaHome = sh(script: 'dirname "$(dirname "' + javaBin + '")"', returnStdout: true).trim()
+                                env.JAVA_HOME = javaHome
+                                env.PATH = "${javaHome}/bin:${env.PATH}"
+                            }
+                        }
+                        sh 'java -version'
+                    } catch (e) {
+                        echo "Warning: Unable to validate JAVA_HOME automatically: ${e.message}"
+                    }
+
                     // Print build information
                     echo """
                     ====== Build Information ======
