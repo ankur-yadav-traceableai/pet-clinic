@@ -1,0 +1,40 @@
+@Library('advanced-complex-lib@main') _
+
+pipeline {
+  agent any
+
+  stages {
+    stage('Run Shared Library Pipeline') {
+      steps {
+        script {
+          buildPipeline([
+            appName : 'spring-petclinic',
+            version : '3.1.0',
+            buildTool: 'maven',
+            scm     : [
+              url          : 'https://github.com/spring-projects/spring-petclinic.git',
+              branch       : '*/main',
+              credentialsId: ''
+            ],
+            testConfig: [
+              unitTests       : [enabled: true],
+              integrationTests: [enabled: false],
+              staticAnalysis  : [enabled: true]
+            ],
+            security: [
+              scan: [enabled: true, tools: ['dependency-check']]
+            ],
+            artifacts: [
+              publish: true
+            ],
+            notifications: [
+              onSuccess: true,
+              onFailure: true,
+              channels : ['console']
+            ]
+          ])
+        }
+      }
+    }
+  }
+}
