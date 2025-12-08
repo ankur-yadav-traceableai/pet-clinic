@@ -1,12 +1,7 @@
 @Library('advanced-complex-lib@main') _  // Using 'main' branch, replace with your desired version
 
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.8.4-openjdk-17'
-            args '-v $HOME/.m2:/root/.m2'
-        }
-    }
+    agent any
     
     parameters {
         // Repository configuration
@@ -99,8 +94,6 @@ pipeline {
     options {
         buildDiscarder(logRotator(numToKeepStr: '30'))
         timeout(time: 30, unit: 'MINUTES')
-        timestamps()
-        ansiColor('xterm')
         disableConcurrentBuilds()
         skipDefaultCheckout()
     }
