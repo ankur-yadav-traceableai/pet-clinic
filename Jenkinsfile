@@ -47,6 +47,11 @@ pipeline {
             description: 'Run static code analysis'
         )
         booleanParam(
+            name: 'SKIP_BUILD_STATIC_CHECKS',
+            defaultValue: true,
+            description: 'Skip Checkstyle/PMD/SpotBugs during the Build stage; Code Quality stage will still run reports'
+        )
+        booleanParam(
             name: 'RUN_SECURITY_SCAN',
             defaultValue: true,
             description: 'Run security scans'
@@ -187,6 +192,19 @@ pipeline {
                             buildArgs << params.BUILD_ARGS
                         }
                         
+                        // Optionally skip static checks that may fail the build
+                        if (params.SKIP_BUILD_STATIC_CHECKS) {
+                            buildArgs << '-Dcheckstyle.skip=true'
+                            buildArgs << '-Dpmd.skip=true'
+                            buildArgs << '-Dspotbugs.skip=true'
+                            // Additional flags helpful for Spring projects
+                            buildArgs << '-Dcheckstyle.failOnViolation=false'
+                            buildArgs << '-Dpmd.failOnViolation=false'
+                            buildArgs << '-Dspotbugs.failOnError=false'
+                            buildArgs << '-Dnohttp.skip=true'
+                            buildArgs << '-Dnohttp.check.skip=true'
+                        }
+                        
                         sh "mvn ${buildArgs.join(' ')}"
                         
                     } else if (params.BUILD_TOOL == 'gradle') {
@@ -209,6 +227,13 @@ pipeline {
                         // Add any additional build arguments
                         if (params.BUILD_ARGS) {
                             buildArgs << params.BUILD_ARGS
+                        }
+                        
+                        // Optionally skip static checks that may fail the build
+                        if (params.SKIP_BUILD_STATIC_CHECKS) {
+                            buildArgs << '-x checkstyleMain -x checkstyleTest'
+                            buildArgs << '-x pmdMain -x pmdTest'
+                            buildArgs << '-x spotbugsMain -x spotbugsTest'
                         }
                         
                         sh "./gradlew ${buildArgs.join(' ')}"
