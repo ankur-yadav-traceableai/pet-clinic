@@ -576,14 +576,18 @@ pipeline {
                     color = 'warning'
                 }
                 
-                // Send Slack notification
-                slackSend(
-                    color: color,
-                    message: "Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
-                             "Branch: ${env.GIT_BRANCH}\n" +
-                             "Commit: ${env.GIT_COMMIT.take(8)}\n" +
-                             "More info at: ${env.BUILD_URL}"
-                )
+                // Send Slack notification (guarded if plugin is not installed)
+                try {
+                    slackSend(
+                        color: color,
+                        message: "Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
+                                 "Branch: ${env.GIT_BRANCH}\n" +
+                                 "Commit: ${env.GIT_COMMIT.take(8)}\n" +
+                                 "More info at: ${env.BUILD_URL}"
+                    )
+                } catch (ignored) {
+                    echo 'Slack plugin not available; skipping Slack notification.'
+                }
                 
                 // Archive test results
                 junit allowEmptyResults: true, testResults: '**/surefire-reports/*.xml,**/failsafe-reports/*.xml,**/test-results/test/*.xml'
