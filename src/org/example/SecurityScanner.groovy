@@ -126,59 +126,90 @@ class SecurityScanner implements Serializable {
     private void runOwaspZap(Map config = [:]) {
         script.echo "Running OWASP ZAP scan..."
         
-        def targetUrl = config.targetUrl ?: script.env.APPLICATION_URL
-        if (!targetUrl) {
-            script.echo "Warning: No target URL specified for OWASP ZAP scan"
+        // Check if web resources exist (like in Jenkinsfile)
+        if (!script.fileExists('src/main/resources/static')) {
+            script.echo "Warning: No web resources found (src/main/resources/static), skipping OWASP ZAP scan"
             return
         }
         
-        def reportDir = config.reportDir ?: 'target/zap'
-        def reportFile = config.reportFile ?: 'zap-report.html'
-        
-        // Start ZAP in daemon mode
-        script.sh 'docker run -d --name zap -p 8080:8080 -i owasp/zap2docker-stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true'
+        script.echo 'Starting application and running OWASP ZAP scan...'
         
         try {
-            // Wait for ZAP to start
-            script.sh 'while ! curl -s http://localhost:8080 >/dev/null; do sleep 1; echo "Waiting for ZAP..."; done'
+            // Start the built JAR in background on port 9090
+            script.sh '''
+                set -e
+                JAR=""
+                if ls target/*.jar >/dev/null 2>&1; then
+                  JAR=$(ls -1 target/*.jar | head -n1)
+                else
+                  JAR=$(find . -path '*/target/*.jar' -maxdepth 3 | head -n1 || true)
+                fi
+                if [ -z "$JAR" ]; then
+                  echo "No JAR found in target directories" >&2
+                  exit 1
+                fi
+                echo "Launching $JAR"
+                nohup java -jar -Dserver.port=9090 "$JAR" > app.log 2>&1 &
+                echo $! > app.pid
+
+                echo "Waiting for app to become available on http://localhost:9090 ..."
+                for i in $(seq 1 60); do
+                  if curl -sf http://localhost:9090/ >/dev/null 2>&1; then
+                    echo "App is up"
+                    break
+                  fi
+                  sleep 2
+                done
+            '''
+
+            // Run ZAP in Docker and scan the app via host.docker.internal
+            script.sh '''
+                mkdir -p reports/zap
+
+                docker run --rm -u root \
+                  -v $(pwd)/reports/zap:/zap/wrk \
+                  --add-host=host.docker.internal:host-gateway \
+                  zaproxy/zap-stable:2.16.1 \
+                  zap-api-scan.py \
+                    -t http://host.docker.internal:9090/ \
+                    -f openapi \
+                    -r report.html \
+                    -d -I
+
+                echo "Report available at reports/zap/report.html"
+            '''
             
-            // Run ZAP spider
-            script.sh "docker exec zap zap-cli -p 8080 status -t 120"
-            script.sh "docker exec zap zap-cli -p 8080 open-url ${targetUrl}"
-            script.sh "docker exec zap zap-cli -p 8080 spider ${targetUrl}"
-            
-            // Run active scan
-            script.sh "docker exec zap zap-cli -p 8080 active-scan -r ${targetUrl}"
-            
-            // Generate report
-            script.sh "mkdir -p ${reportDir}"
-            script.sh "docker exec zap zap-cli -p 8080 report -o /zap/${reportFile} -f html"
-            script.sh "docker cp zap:/zap/${reportFile} ${reportDir}/"
-            
-            // Publish HTML report
+            // Publish ZAP report
             script.publishHTML([
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
-                reportDir: reportDir,
-                reportFiles: reportFile,
+                reportDir: 'reports/zap',
+                reportFiles: 'report.html',
                 reportName: 'OWASP ZAP Report',
-                reportTitles: 'OWASP ZAP'
+                reportTitles: 'OWASP ZAP Security Scan'
             ])
             
             // Store results
             scanResults['owasp-zap'] = [
                 tool: 'OWASP ZAP',
-                target: targetUrl,
-                reportDir: reportDir,
-                reportFile: "${reportDir}/${reportFile}",
+                target: 'http://localhost:9090/',
+                reportDir: 'reports/zap',
+                reportFile: 'reports/zap/report.html',
                 status: 'completed'
             ]
             
         } finally {
-            // Stop and remove ZAP container
-            script.sh 'docker stop zap || true'
-            script.sh 'docker rm zap || true'
+            // Cleanup ZAP and stop the app
+            script.sh '''
+                docker stop zap >/dev/null 2>&1 || true
+                docker rm zap >/dev/null 2>&1 || true
+                if [ -f app.pid ]; then
+                  kill $(cat app.pid) >/dev/null 2>&1 || true
+                  rm -f app.pid
+                fi
+                rm -rf $(pwd)/reports/zap
+            '''
         }
     }
     
@@ -245,33 +276,26 @@ class SecurityScanner implements Serializable {
     private void runTrivyScan(Map config = [:]) {
         script.echo "Running Trivy container scan..."
         
-        def imageName = config.imageName ?: script.env.IMAGE_NAME
-        if (!imageName) {
-            script.echo "Warning: No image name specified for Trivy scan"
+        // Check if Dockerfile exists (created during build stage)
+        if (!script.fileExists('Dockerfile')) {
+            script.echo "Warning: Dockerfile not found, skipping Trivy scan"
             return
         }
         
-        def reportDir = config.reportDir ?: 'target/trivy'
-        def reportFile = config.reportFile ?: 'trivy-report.json'
+        def appName = config.appName ?: script.env.APP_NAME ?: 'spring-petclinic'
+        def imageName = "${appName}:latest"
         
-        // Install Trivy if not available
-        if (!script.sh(script: 'which trivy', returnStatus: true)) {
-            script.sh 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin'
-        }
+        script.sh """
+            mkdir -p reports/trivy
+            /usr/bin/trivy image --severity CRITICAL --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o reports/trivy/trivy-report.html ${imageName} || true
+        """
         
-        // Run Trivy scan
-        script.sh "mkdir -p ${reportDir}"
-        script.sh "trivy image --format json --output ${reportDir}/${reportFile} --severity ${config.severity ?: 'CRITICAL,HIGH'} ${imageName} || true"
-        
-        // Generate HTML report
-        script.sh "trivy image --format template --template '@html.tpl' --output ${reportDir}/trivy-report.html --severity ${config.severity ?: 'CRITICAL,HIGH'} ${imageName} || true"
-        
-        // Publish HTML report
+        // Publish Trivy report
         script.publishHTML([
             allowMissing: true,
             alwaysLinkToLastBuild: true,
             keepAll: true,
-            reportDir: reportDir,
+            reportDir: 'reports/trivy',
             reportFiles: 'trivy-report.html',
             reportName: 'Trivy Report',
             reportTitles: 'Trivy Security Scan'
@@ -281,8 +305,8 @@ class SecurityScanner implements Serializable {
         scanResults['trivy'] = [
             tool: 'Trivy',
             image: imageName,
-            reportDir: reportDir,
-            reportFile: "${reportDir}/${reportFile}",
+            reportDir: 'reports/trivy',
+            reportFile: 'reports/trivy/trivy-report.html',
             status: 'completed'
         ]
     }

@@ -23,7 +23,10 @@ class PipelineConfig implements Serializable {
         targetCompatibility: '11',
         buildArgs: [],
         environment: [:],
-        jvmOpts: ''
+        jvmOpts: '',
+        parallel: true,
+        skipBuildStaticChecks: true,
+        generateDocs: false
     ]
     
     // Test configuration
@@ -149,7 +152,7 @@ class PipelineConfig implements Serializable {
         if (!version) {
             throw new IllegalArgumentException('version is required')
         }
-        if (!scam.url) {
+        if (!scm.url) {
             throw new IllegalArgumentException('scm.url is required')
         }
         
@@ -194,6 +197,14 @@ class PipelineConfig implements Serializable {
                 throw e
             }
         }()
+    }
+    
+    /**
+     * Execute stages in parallel
+     */
+    def parallel(Map stages) {
+        // Filter out null stages
+        return stages.findAll { it.value != null }
     }
 }
 

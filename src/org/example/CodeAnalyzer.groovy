@@ -66,36 +66,43 @@ class CodeAnalyzer implements Serializable {
     private Map runCheckstyle(Map config = [:]) {
         script.echo "Running Checkstyle analysis..."
         
-        def configFile = config.configFile ?: 'google_checks.xml'
-        def reportFile = config.reportFile ?: 'target/checkstyle-result.xml'
-        
         if (script.fileExists('pom.xml')) {
-            script.sh "mvn checkstyle:checkstyle -Dcheckstyle.config.location=${configFile}"
-        } else if (script.fileExists('build.gradle')) {
-            // Configure checkstyle in build.gradle if not already present
-            if (!script.fileExists('config/checkstyle/checkstyle.xml')) {
-                script.sh "mkdir -p config/checkstyle"
-                script.sh "curl -o config/checkstyle/checkstyle.xml https://raw.githubusercontent.com/checkstyle/checkstyle/master/src/main/resources/google_checks.xml"
+            script.sh 'mvn checkstyle:checkstyle'
+            // Archive XML
+            script.archiveArtifacts artifacts: '**/target/checkstyle-result.xml', allowEmptyArchive: true
+            // Publish HTML if available (via Maven Site)
+            if (script.fileExists('target/site/checkstyle.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site',
+                    reportFiles: 'checkstyle.html',
+                    reportName: 'Checkstyle Report',
+                    reportTitles: 'Checkstyle'
+                ])
             }
-            script.sh "./gradlew checkstyleMain checkstyleTest"
-        }
-        
-        // Publish checkstyle results
-        if (script.fileExists(reportFile)) {
-            script.step([
-                $class: 'CheckStylePublisher',
-                canRunOnFailed: true,
-                defaultEncoding: '',
-                healthy: '100',
-                pattern: reportFile,
-                unHealthy: '90',
-                useStableBuildAsReference: true
-            ])
+        } else if (script.fileExists('build.gradle')) {
+            script.sh './gradlew checkstyleMain checkstyleTest --no-daemon'
+            // Archive XML
+            script.archiveArtifacts artifacts: '**/build/reports/checkstyle/*.xml', allowEmptyArchive: true
+            // Publish HTML if available
+            if (script.fileExists('build/reports/checkstyle/main.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'build/reports/checkstyle',
+                    reportFiles: 'main.html',
+                    reportName: 'Checkstyle Report',
+                    reportTitles: 'Checkstyle'
+                ])
+            }
         }
         
         return [
             tool: 'checkstyle',
-            reportFile: reportFile,
+            reportFile: 'checkstyle-result.xml',
             status: 'completed'
         ]
     }
@@ -106,39 +113,65 @@ class CodeAnalyzer implements Serializable {
     private Map runPMD(Map config = [:]) {
         script.echo "Running PMD analysis..."
         
-        def ruleset = config.ruleset ?: 'rulesets/java/quickstart.xml'
-        def reportFile = config.reportFile ?: 'target/pmd.xml'
-        
         if (script.fileExists('pom.xml')) {
-            script.sh "mvn pmd:pmd -Dpmd.ruleset=${ruleset} -Dpmd.outputFile=${reportFile}"
+            script.sh 'mvn pmd:pmd pmd:cpd'
+            // Archive XML reports as a fallback
+            script.archiveArtifacts artifacts: '**/target/pmd.xml,**/target/cpd.xml', allowEmptyArchive: true
+            // Publish HTML reports if generated via Maven Site
+            if (script.fileExists('target/site/pmd.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site',
+                    reportFiles: 'pmd.html',
+                    reportName: 'PMD Report',
+                    reportTitles: 'PMD'
+                ])
+            }
+            if (script.fileExists('target/site/cpd.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site',
+                    reportFiles: 'cpd.html',
+                    reportName: 'CPD Report',
+                    reportTitles: 'CPD'
+                ])
+            }
         } else if (script.fileExists('build.gradle')) {
-            // Configure PMD in build.gradle if not already present
-            script.sh """
-            if ! grep -q 'pmd' build.gradle; then
-                echo "\napply plugin: 'pmd'\n\n" >> build.gradle
-            fi
-            """
-            script.sh "./gradlew pmdMain pmdTest"
-        }
-        
-        // Publish PMD results
-        if (script.fileExists(reportFile)) {
-            script.step([
-                $class: 'PmdPublisher',
-                pattern: reportFile,
-                healthy: 100,
-                unHealthy: 90,
-                pluginName: 'PMD',
-                thresholdLimit: 'low',
-                defaultEncoding: '',
-                canRunOnFailed: true,
-                useStableBuildAsReference: true
-            ])
+            script.sh './gradlew pmdMain pmdTest cpdCheck --no-daemon'
+            // Archive XML reports as a fallback
+            script.archiveArtifacts artifacts: '**/build/reports/pmd/*.xml,**/build/reports/cpd/*.xml', allowEmptyArchive: true
+            // Publish HTML reports if available
+            if (script.fileExists('build/reports/pmd/main.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'build/reports/pmd',
+                    reportFiles: 'main.html',
+                    reportName: 'PMD Report',
+                    reportTitles: 'PMD'
+                ])
+            }
+            if (script.fileExists('build/reports/cpd/index.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'build/reports/cpd',
+                    reportFiles: 'index.html',
+                    reportName: 'CPD Report',
+                    reportTitles: 'CPD'
+                ])
+            }
         }
         
         return [
             tool: 'pmd',
-            reportFile: reportFile,
+            reportFile: 'pmd.xml',
             status: 'completed'
         ]
     }
@@ -149,40 +182,43 @@ class CodeAnalyzer implements Serializable {
     private Map runSpotBugs(Map config = [:]) {
         script.echo "Running SpotBugs analysis..."
         
-        def reportFile = config.reportFile ?: 'target/spotbugs.xml'
-        
         if (script.fileExists('pom.xml')) {
-            script.sh "mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:check -Dspotbugs.failOnError=false"
-            script.sh "mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs -Dspotbugs.includeFilterFile=findbugs-include.xml -Dspotbugs.excludeFilterFile=findbugs-exclude.xml -Dspotbugs.failOnError=false"
+            script.sh 'mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs -Dspotbugs.failOnError=false'
+            // Archive XML
+            script.archiveArtifacts artifacts: '**/target/spotbugsXml.xml', allowEmptyArchive: true
+            // Publish HTML if available (via Maven Site)
+            if (script.fileExists('target/site/spotbugs.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/site',
+                    reportFiles: 'spotbugs.html',
+                    reportName: 'SpotBugs Report',
+                    reportTitles: 'SpotBugs'
+                ])
+            }
         } else if (script.fileExists('build.gradle')) {
-            // Configure SpotBugs in build.gradle if not already present
-            script.sh """
-            if ! grep -q 'spotbugs' build.gradle; then
-                echo "\napply plugin: 'com.github.spotbugs'\n\nbuildscript {\n    repositories {\n        maven {\n            url 'https://plugins.gradle.org/m2/'\n        }\n    }\n    dependencies {\n        classpath 'com.github.spotbugs.snom:spotbugs-gradle-plugin:4.7.0'\n    }\n}\n" >> build.gradle
-            fi
-            """
-            script.sh "./gradlew spotbugsMain spotbugsTest"
-        }
-        
-        // Publish SpotBugs results
-        if (script.fileExists(reportFile)) {
-            script.step([
-                $class: 'FindBugsPublisher',
-                pattern: reportFile,
-                excludePattern: '',
-                canRunOnFailed: true,
-                defaultEncoding: '',
-                excludePattern: '',
-                healthy: '1',
-                includePattern: '',
-                unHealthy: '10',
-                useStableBuildAsReference: true
-            ])
+            script.sh './gradlew spotbugsMain spotbugsTest --no-daemon'
+            // Archive XML
+            script.archiveArtifacts artifacts: '**/build/reports/spotbugs/*.xml', allowEmptyArchive: true
+            // Publish HTML if available
+            if (script.fileExists('build/reports/spotbugs/main.html')) {
+                script.publishHTML([
+                    allowMissing: true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'build/reports/spotbugs',
+                    reportFiles: 'main.html',
+                    reportName: 'SpotBugs Report',
+                    reportTitles: 'SpotBugs'
+                ])
+            }
         }
         
         return [
             tool: 'spotbugs',
-            reportFile: reportFile,
+            reportFile: 'spotbugsXml.xml',
             status: 'completed'
         ]
     }

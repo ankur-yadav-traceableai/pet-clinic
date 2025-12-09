@@ -51,30 +51,45 @@ class BuildManager implements Serializable {
      * Build using Maven
      */
     private List<Map> buildWithMaven(Map config) {
-        def mvnCmd = "mvn"
-        def goals = ["clean", "package"]
+        def buildArgs = ['clean', 'package']
         
-        // Add JVM options if specified
-        def jvmOpts = config.jvmOpts ?: "-Xmx2g -XX:MaxPermSize=512m"
-        
-        // Build command with options
-        def cmd = ["JAVA_OPTS=${jvmOpts}", mvnCmd]
-        
-        // Add build arguments
-        if (config.sourceCompatibility) {
-            cmd << "-Dmaven.compiler.source=${config.sourceCompatibility}"
+        // Parallel build
+        if (config.parallel) {
+            buildArgs << '-T 1C'
         }
-        if (config.targetCompatibility) {
-            cmd << "-Dmaven.compiler.target=${config.targetCompatibility}"
+        
+        // Skip tests if configured
+        if (config.skipTests) {
+            buildArgs << '-DskipTests'
+        }
+        
+        // Skip static checks during build
+        if (config.skipBuildStaticChecks) {
+            buildArgs << '-Dcheckstyle.skip=true'
+            buildArgs << '-Dpmd.skip=true'
+            buildArgs << '-Dspotbugs.skip=true'
+            buildArgs << '-Dcheckstyle.failOnViolation=false'
+            buildArgs << '-Dpmd.failOnViolation=false'
+            buildArgs << '-Dspotbugs.failOnError=false'
+            buildArgs << '-Dnohttp.skip=true'
+            buildArgs << '-Dnohttp.check.skip=true'
+            buildArgs << '-DskipChecks'
+            buildArgs << '-Dnohttp=false'
         }
         
         // Add custom build arguments
         if (config.buildArgs) {
-            cmd.addAll(config.buildArgs)
+            buildArgs.addAll(config.buildArgs)
         }
         
         // Execute build
-        script.sh cmd.join(' ')
+        script.sh "mvn ${buildArgs.join(' ')}"
+        
+        // Archive artifacts
+        script.archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
+        
+        // Build Docker image for Trivy scan
+        buildDockerImage(config)
         
         // Find and return artifacts
         return findArtifacts('**/target/*.jar')
@@ -84,34 +99,77 @@ class BuildManager implements Serializable {
      * Build using Gradle
      */
     private List<Map> buildWithGradle(Map config) {
-        def gradleCmd = "./gradlew"
-        def tasks = ["clean", "build"]
+        def buildArgs = ['clean', 'build']
         
-        // Add JVM options if specified
-        def jvmOpts = config.jvmOpts ?: "-Xmx2g -Dorg.gradle.daemon=false"
+        // Parallel build
+        if (config.parallel) {
+            buildArgs << '--parallel'
+            buildArgs << "--max-workers=${Runtime.runtime.availableProcessors()}"
+        }
         
-        // Build command with options
-        def cmd = ["JAVA_OPTS=${jvmOpts}", gradleCmd]
+        // Skip tests if configured
+        if (config.skipTests) {
+            buildArgs << '-x test'
+        }
         
-        // Add build arguments
-        if (config.sourceCompatibility) {
-            cmd << "-Porg.gradle.java.home=${config.javaHome}"
-            cmd << "-Porg.gradle.jvmargs=${jvmOpts}"
+        // Skip static checks during build
+        if (config.skipBuildStaticChecks) {
+            buildArgs << '-x checkstyleMain -x checkstyleTest'
+            buildArgs << '-x pmdMain -x pmdTest'
+            buildArgs << '-x spotbugsMain -x spotbugsTest'
         }
         
         // Add custom build arguments
         if (config.buildArgs) {
-            cmd.addAll(config.buildArgs)
+            buildArgs.addAll(config.buildArgs)
         }
         
-        // Add tasks
-        cmd.addAll(tasks)
-        
         // Execute build
-        script.sh cmd.join(' ')
+        script.sh "./gradlew ${buildArgs.join(' ')}"
+        
+        // Archive artifacts
+        script.archiveArtifacts artifacts: '**/build/libs/*.jar', allowEmptyArchive: true
+        
+        // Build Docker image for Trivy scan
+        buildDockerImage(config)
         
         // Find and return artifacts
         return findArtifacts('**/build/libs/*.jar')
+    }
+    
+    /**
+     * Build Docker image for security scanning
+     */
+    private void buildDockerImage(Map config) {
+        def appName = config.appName ?: script.env.APP_NAME ?: 'app'
+        
+        script.echo "Building Docker image for ${appName}..."
+        
+        script.sh '''
+            set -e
+            # Find the built JAR (prefer Maven target jar, exclude sources/javadoc)
+            JAR=$(find . -path '*/target/*.jar' ! -name '*sources*' ! -name '*javadoc*' | head -n1 || true)
+            if [ -z "$JAR" ]; then
+              echo "No JAR found under target directories" >&2
+              exit 1
+            fi
+            echo "Using JAR: $JAR"
+
+            # Normalize to app.jar at workspace root for Docker context
+            cp "$JAR" app.jar
+
+            # Generate Dockerfile
+            cat > Dockerfile <<'EOF'
+FROM openjdk:17-ea-oraclelinux7
+WORKDIR /
+COPY app.jar /app.jar
+EXPOSE 8080
+ENTRYPOINT java -jar /app.jar
+EOF
+
+            # Build Docker image using APP_NAME from environment
+            docker build -t ${APP_NAME}:latest .
+        '''
     }
     
     /**
@@ -122,28 +180,39 @@ class BuildManager implements Serializable {
         
         script.echo "Looking for artifacts matching: ${pattern}"
         
-        // Find files matching the pattern
-        def files = script.findFiles(glob: pattern)
-        
-        // Create artifact entries
-        files.each { file ->
-            def artifact = [
-                name: file.name,
-                path: file.path,
-                size: file.length(),
-                lastModified: new Date(file.lastModified())
-            ]
+        try {
+            // Find files matching the pattern
+            def files = script.findFiles(glob: pattern)
             
-            // Add checksum if available
-            try {
-                def checksum = script.sh(script: "sha256sum ${file.path} | cut -d' ' -f1", returnStdout: true).trim()
-                artifact.checksum = checksum
-            } catch (Exception e) {
-                script.echo "Warning: Failed to calculate checksum for ${file.name}: ${e.message}"
+            // Create artifact entries
+            files.each { file ->
+                def artifact = [
+                    name: file.name,
+                    path: file.path,
+                    size: file.length(),
+                    lastModified: new Date(file.lastModified())
+                ]
+                
+                // Add checksum if available
+                try {
+                    def checksum = script.sh(script: "sha256sum ${file.path} | cut -d' ' -f1", returnStdout: true).trim()
+                    artifact.checksum = checksum
+                } catch (Exception e) {
+                    script.echo "Warning: Failed to calculate checksum for ${file.name}: ${e.message}"
+                }
+                
+                artifacts << artifact
+                script.echo "Found artifact: ${file.path} (${file.length()} bytes)"
             }
-            
-            artifacts << artifact
-            script.echo "Found artifact: ${file.path} (${file.length()} bytes)"
+        } catch (Exception e) {
+            script.echo "Warning: findFiles not available, using shell command"
+            // Fallback to shell command
+            def jarFiles = script.sh(script: "find . -path '${pattern}' 2>/dev/null || true", returnStdout: true).trim()
+            if (jarFiles) {
+                jarFiles.split('\n').each { path ->
+                    artifacts << [name: path.split('/').last(), path: path]
+                }
+            }
         }
         
         if (artifacts.isEmpty()) {

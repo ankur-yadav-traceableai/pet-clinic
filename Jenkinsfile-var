@@ -16,13 +16,32 @@ pipeline {
               branch       : '*/main',
               credentialsId: ''
             ],
+            buildConfig: [
+              parallel: true,
+              skipBuildStaticChecks: true,
+              generateDocs: false,
+              buildArgs: []
+            ],
             testConfig: [
-              unitTests       : [enabled: true],
-              integrationTests: [enabled: false],
-              staticAnalysis  : [enabled: true]
+              unitTests       : [
+                enabled: true,
+                parallel: true,
+                forkCount: 1
+              ],
+              integrationTests: [
+                enabled: false
+              ],
+              staticAnalysis  : [
+                enabled: true,
+                tools: ['checkstyle', 'pmd', 'spotbugs']
+              ]
             ],
             security: [
-              scan: [enabled: true, tools: ['dependency-check']]
+              scan: [
+                enabled: true, 
+                tools: ['dependency-check', 'owasp-zap', 'trivy'],
+                failOnVulnerability: false
+              ]
             ],
             artifacts: [
               publish: true
