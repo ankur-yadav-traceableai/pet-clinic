@@ -262,6 +262,33 @@ pipeline {
                     
                     // Archive artifacts
                     archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
+
+                    // Create Dockerfile and build image for Trivy scan
+                    sh '''
+                        set -e
+                        # Find the built JAR (prefer Maven target jar, exclude sources/javadoc)
+                        JAR=$(find . -path '*/target/*.jar' ! -name '*sources*' ! -name '*javadoc*' | head -n1 || true)
+                        if [ -z "$JAR" ]; then
+                          echo "No JAR found under target directories" >&2
+                          exit 1
+                        fi
+                        echo "Using JAR: $JAR"
+
+                        # Normalize to app.jar at workspace root for Docker context
+                        cp "$JAR" app.jar
+
+                        # Generate Dockerfile
+                        cat > Dockerfile <<'EOF'
+FROM openjdk:17-jdk-slim
+WORKDIR /
+COPY app.jar /app.jar
+EXPOSE 8080
+ENTRYPOINT java -jar /app.jar
+EOF
+
+                        # Build Docker image using APP_NAME from environment
+                        docker build -t ${APP_NAME}:latest .
+                    '''
                 }
             }
         }
@@ -524,33 +551,69 @@ pipeline {
                     // Archive the report
                     dependencyCheckPublisher pattern: '**/reports/dependency-check/dependency-check-report.xml'
                     
-                    // OWASP ZAP (if a web application is running)
+                    // OWASP ZAP (start app JAR in background and scan if web resources exist)
                     if (fileExists('src/main/resources/static')) {
-                        echo 'Running OWASP ZAP scan...'
-                        sh '''
-                            # Start ZAP in daemon mode
+                        echo 'Starting application and running OWASP ZAP scan...'
+                        try {
+                            // Start the built JAR in background on port 8080
+                            sh '''
+                                set -e
+                                JAR=""
+                                if ls target/*.jar >/dev/null 2>&1; then
+                                  JAR=$(ls -1 target/*.jar | head -n1)
+                                else
+                                  JAR=$(find . -path '*/target/*.jar' -maxdepth 3 | head -n1 || true)
+                                fi
+                                if [ -z "$JAR" ]; then
+                                  echo "No JAR found in target directories" >&2
+                                  exit 1
+                                fi
+                                echo "Launching $JAR"
+                                nohup java -jar "$JAR" > app.log 2>&1 &
+                                echo $! > app.pid
 
-                            docker run -d --name zap -p 8080:8080 -i owasp/zap2docker-stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
-                            
-                            # Wait for ZAP to start
-                            while ! curl -s http://localhost:8080 >/dev/null; do 
-                                sleep 1
-                                echo "Waiting for ZAP..."
-                            done
-                            
-                            # Run a quick scan (replace localhost:8080 with your app's URL)
-                            docker exec zap zap-cli -p 8080 quick-scan -s all -r http://host.docker.internal:8080/
-                            
-                            # Generate report
-                            mkdir -p reports/zap
-                            docker exec zap zap-cli -p 8080 report -o /zap/report.html -f html
-                            docker cp zap:/zap/report.html reports/zap/
-                            
-                            # Stop and remove container
-                            docker stop zap || true
-                            docker rm zap || true
-                        '''
-                        
+                                echo "Waiting for app to become available on http://localhost:8080 ..."
+                                for i in $(seq 1 60); do
+                                  if curl -sf http://localhost:8080/ >/dev/null 2>&1; then
+                                    echo "App is up"
+                                    break
+                                  fi
+                                  sleep 2
+                                done
+                            '''
+
+                            // Run ZAP in Docker and scan the app via host.docker.internal
+                            sh '''
+                                # Start ZAP in daemon mode on container port 8080, mapped to host port 8090 to avoid conflicts
+                                docker run -d --name zap -p 8090:8080 --add-host=host.docker.internal:host-gateway -i owasp/zap2docker-stable \
+                                  zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
+
+                                # Wait for ZAP to start
+                                until curl -s http://localhost:8090 >/dev/null; do 
+                                  sleep 1
+                                  echo "Waiting for ZAP..."
+                                done
+
+                                # Run a quick scan against the app running on the host
+                                docker exec zap zap-cli -p 8080 quick-scan -s all -r http://host.docker.internal:8080/
+
+                                # Generate report
+                                mkdir -p reports/zap
+                                docker exec zap zap-cli -p 8080 report -o /zap/report.html -f html
+                                docker cp zap:/zap/report.html reports/zap/
+                            '''
+                        } finally {
+                            // Cleanup ZAP and stop the app
+                            sh '''
+                                docker stop zap >/dev/null 2>&1 || true
+                                docker rm zap >/dev/null 2>&1 || true
+                                if [ -f app.pid ]; then
+                                  kill $(cat app.pid) >/dev/null 2>&1 || true
+                                  rm -f app.pid
+                                fi
+                            '''
+                        }
+
                         // Publish ZAP report
                         publishHTML([
                             allowMissing: true,
