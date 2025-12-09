@@ -120,6 +120,17 @@ class SecurityScanner implements Serializable {
         } else {
             script.echo "Warning: Dependency-Check XML not found at ${dcvXmlPath}; summary counts will be zero"
         }
+
+        // Publish HTML report
+        script.publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: reportDir,
+                reportFiles: reportFile,
+                reportName: 'Dependency-Check Report',
+                reportTitles: 'Dependency-Check'
+        ])
         
         // Store results with findings
         scanResults['dependency-check'] = [
