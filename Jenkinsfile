@@ -584,28 +584,19 @@ EOF
 
                             // Run ZAP in Docker and scan the app via host.docker.internal
                             sh '''
-                                # Start ZAP in daemon mode on container port 8080, mapped to host port 8090 to avoid conflicts
-                                docker run -d --name zap -p 8090:8080 --add-host=host.docker.internal:host-gateway -i zaproxy/zap-stable:2.16.1 \
-                                  zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
+                                mkdir -p reports/zap
 
-                                # Wait for ZAP to start
-                                until curl -s http://localhost:8090 >/dev/null; do 
-                                  sleep 1
-                                  echo "Waiting for ZAP..."
-                                done
-
-                                # Run a quick scan against the app running on the host
-                                docker exec zap \
-                                    zap-api-scan.py \
+                                docker run --rm -u root \
+                                  -v $(pwd)/reports/zap:/zap/wrk \
+                                  --add-host=host.docker.internal:host-gateway \
+                                  zaproxy/zap-stable:2.16.1 \
+                                  zap-api-scan.py \
                                     -t http://host.docker.internal:9090/ \
                                     -f openapi \
-                                    -r /zap/report.html \
-                                    -d
+                                    -r report.html \
+                                    -d -I
 
-
-                                # Generate report
-                                mkdir -p reports/zap
-                                docker cp zap:/zap/report.html reports/zap/
+                                echo "Report available at zap-reports/report.html"
                             '''
                         } finally {
                             // Cleanup ZAP and stop the app
@@ -616,6 +607,7 @@ EOF
                                   kill $(cat app.pid) >/dev/null 2>&1 || true
                                   rm -f app.pid
                                 fi
+                                rm -rf $(pwd)/reports/zap
                             '''
                         }
 
