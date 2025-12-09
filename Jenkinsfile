@@ -382,15 +382,24 @@ pipeline {
                     // Run PMD
                     if (params.BUILD_TOOL == 'maven') {
                         sh 'mvn pmd:pmd pmd:cpd'
-                        pmd canRunOnFailed: true, 
-                            pattern: '**/target/pmd.xml',
-                            reportFormat: 'xml',
-                            ruleSetFiles: 'pmd-ruleset.xml'
+                        step([
+                            $class: 'WarningsPublisher',
+                            canRunOnFailed: true,
+                            parserConfigurations: [
+                                [$class: 'ParserConfiguration', pattern: '**/target/pmd.xml', parserName: 'PMD'],
+                                [$class: 'ParserConfiguration', pattern: '**/target/cpd.xml', parserName: 'CPD']
+                            ]
+                        ])
                     } else {
                         sh './gradlew pmdMain pmdTest cpdCheck --no-daemon'
-                        pmd canRunOnFailed: true, 
-                            pattern: '**/build/reports/pmd/*.xml',
-                            reportFormat: 'xml'
+                        step([
+                            $class: 'WarningsPublisher',
+                            canRunOnFailed: true,
+                            parserConfigurations: [
+                                [$class: 'ParserConfiguration', pattern: '**/build/reports/pmd/*.xml', parserName: 'PMD'],
+                                [$class: 'ParserConfiguration', pattern: '**/build/reports/cpd/*.xml', parserName: 'CPD']
+                            ]
+                        ])
                     }
                     
                     // Run Checkstyle
@@ -472,7 +481,7 @@ pipeline {
                         echo 'Running OWASP ZAP scan...'
                         sh '''
                             # Start ZAP in daemon mode
-                            exit 0
+
                             docker run -d --name zap -p 8080:8080 -i owasp/zap2docker-stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
                             
                             # Wait for ZAP to start
