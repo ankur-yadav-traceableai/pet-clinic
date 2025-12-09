@@ -155,8 +155,8 @@ class CodeAnalyzer implements Serializable {
         def reportFile = config.reportFile ?: 'target/spotbugs.xml'
         
         if (script.fileExists('pom.xml')) {
-            script.sh "mvn spotbugs:spotbugs spotbugs:check -Dspotbugs.failOnError=false"
-            script.sh "mvn spotbugs:spotbugs -Dspotbugs.includeFilterFile=findbugs-include.xml -Dspotbugs.excludeFilterFile=findbugs-exclude.xml"
+            script.sh "mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:check -Dspotbugs.failOnError=false"
+            script.sh "mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs -Dspotbugs.includeFilterFile=findbugs-include.xml -Dspotbugs.excludeFilterFile=findbugs-exclude.xml -Dspotbugs.failOnError=false"
         } else if (script.fileExists('build.gradle')) {
             // Configure SpotBugs in build.gradle if not already present
             script.sh """

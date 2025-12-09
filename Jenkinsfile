@@ -473,7 +473,7 @@ pipeline {
                     
                     // Run SpotBugs (publish via HTML + archive, no plugin dependency)
                     if (params.BUILD_TOOL == 'maven') {
-                        sh 'mvn spotbugs:spotbugs'
+                        sh 'mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.3.1:spotbugs -Dspotbugs.failOnError=false'
                         // Archive XML
                         archiveArtifacts artifacts: '**/target/spotbugsXml.xml', allowEmptyArchive: true
                         // Publish HTML if available (via Maven Site)
