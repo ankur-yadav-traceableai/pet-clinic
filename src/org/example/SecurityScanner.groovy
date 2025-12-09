@@ -68,54 +68,29 @@ class SecurityScanner implements Serializable {
     private void runDependencyCheck(Map config = [:]) {
         script.echo "Running OWASP Dependency-Check..."
         
-        def reportDir = config?.reportDir ?: 'target/dependency-check'
-        def reportFile = config?.reportFile ?: 'dependency-check-report.html'
+        // Mirror Jenkinsfile behavior: use Jenkins Dependency-Check plugin and publish results
+        def reportDir = config?.reportDir ?: "${script.env.WORKSPACE}/reports/dependency-check"
+        script.sh "mkdir -p ${reportDir}"
         
-        // Install if not available
-        if (!script.tool('Dependency-Check')) {
-            script.echo "Installing OWASP Dependency-Check..."
-            script.sh 'wget -qO - https://dl.bintray.com/jeremy-long/owasp/dependency-check.gpg.key | sudo apt-key add -'
-            script.sh 'echo "deb https://dl.bintray.com/jeremy-long/owasp /" | sudo tee /etc/apt/sources.list.d/dependency-check.list'
-            script.sh 'sudo apt-get update && sudo apt-get install -y dependency-check'
-        }
+        def odcInstallation = config?.odcInstallation ?: 'Dependency-Check'
+        def additionalArgs = config?.additionalArguments ?: "--scan ${script.env.WORKSPACE} --format HTML --format XML --out ${reportDir}"
         
-        // Run dependency check
-        def scanCmd = [
-            'dependency-check.sh',
-            '--project', 'Dependency-Check',
-            '--scan', '.',
-            '--out', reportDir,
-            '--format', 'HTML', 'JSON', 'XML',
-            '--enableExperimental',
-            '--failOnCVSS', config?.failOnCVSS ?: '7'
-        ]
+        // Run scan using Jenkins plugin steps (same as Jenkinsfile)
+        script.dependencyCheck(
+            additionalArguments: additionalArgs,
+            odcInstallation: odcInstallation,
+            skipOnScmChange: false,
+            skipOnUpstreamChange: false
+        )
         
-        // Add suppression file if exists
-        if (script.fileExists('dependency-check-suppression.xml')) {
-            scanCmd << '--suppression' << 'dependency-check-suppression.xml'
-        }
+        // Publish results using the plugin's publisher
+        script.dependencyCheckPublisher(pattern: '**/reports/dependency-check/dependency-check-report.xml')
         
-        script.sh scanCmd.join(' ')
-        
-        // Archive reports
-        script.archiveArtifacts artifacts: "${reportDir}/**/*", allowEmptyArchive: true
-        
-        // Publish HTML report
-        script.publishHTML([
-            allowMissing: true,
-            alwaysLinkToLastBuild: true,
-            keepAll: true,
-            reportDir: reportDir,
-            reportFiles: reportFile,
-            reportName: 'Dependency-Check Report',
-            reportTitles: 'Dependency-Check'
-        ])
-        
-        // Store results
+        // Store results (reference XML since publisher relies on it)
         scanResults['dependency-check'] = [
             tool: 'OWASP Dependency-Check',
             reportDir: reportDir,
-            reportFile: "${reportDir}/${reportFile}",
+            reportFile: "${reportDir}/dependency-check-report.xml",
             status: 'completed'
         ]
     }
