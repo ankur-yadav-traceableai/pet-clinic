@@ -63,6 +63,32 @@ class SecurityScanner implements Serializable {
     }
     
     /**
+     * Parse OWASP Dependency-Check XML and return severity counts
+     */
+    private Map parseDependencyCheckReport(String xmlPath) {
+        def counts = [critical: 0, high: 0, medium: 0, low: 0]
+        try {
+            def xmlText = script.readFile(xmlPath)
+            def root = new groovy.util.XmlSlurper().parseText(xmlText)
+            // Iterate vulnerabilities and count by severity
+            root.dependencies.dependency.each { dep ->
+                dep.vulnerabilities.vulnerability.each { v ->
+                    def sev = (v.severity?.text() ?: '').toLowerCase()
+                    switch (sev) {
+                        case 'critical': counts.critical++; break
+                        case 'high': counts.high++; break
+                        case 'medium': counts.medium++; break
+                        case 'low': counts.low++; break
+                    }
+                }
+            }
+        } catch (Exception e) {
+            script.echo "Warning: Failed to parse Dependency-Check report ${xmlPath}: ${e.message}"
+        }
+        return counts
+    }
+    
+    /**
      * Run OWASP Dependency-Check
      */
     private void runDependencyCheck(Map config = [:]) {
@@ -86,11 +112,21 @@ class SecurityScanner implements Serializable {
         // Publish results using the plugin's publisher
         script.dependencyCheckPublisher(pattern: '**/reports/dependency-check/dependency-check-report.xml')
         
-        // Store results (reference XML since publisher relies on it)
+        // Parse XML report to compute severity counts
+        def dcvXmlPath = "${reportDir}/dependency-check-report.xml"
+        def dcvFindings = [critical: 0, high: 0, medium: 0, low: 0]
+        if (script.fileExists(dcvXmlPath)) {
+            dcvFindings = parseDependencyCheckReport(dcvXmlPath)
+        } else {
+            script.echo "Warning: Dependency-Check XML not found at ${dcvXmlPath}; summary counts will be zero"
+        }
+        
+        // Store results with findings
         scanResults['dependency-check'] = [
             tool: 'OWASP Dependency-Check',
             reportDir: reportDir,
             reportFile: "${reportDir}/dependency-check-report.xml",
+            findings: dcvFindings,
             status: 'completed'
         ]
     }
@@ -308,18 +344,11 @@ class SecurityScanner implements Serializable {
         
         // Process scan results
         scanResults.each { tool, result ->
-            // This is a simplified example - in a real implementation,
-            // you would parse the actual report files to get vulnerability counts
             def scanSummary = [
                 tool: result.tool,
                 status: result.status,
                 report: result.reportFile ?: 'N/A',
-                findings: [
-                    critical: 0, // These would be populated from actual scan results
-                    high: 0,
-                    medium: 0,
-                    low: 0
-                ]
+                findings: (result.findings ?: [critical: 0, high: 0, medium: 0, low: 0])
             ]
             
             // Update summary
