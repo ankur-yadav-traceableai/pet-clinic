@@ -569,7 +569,7 @@ EOF
                                   exit 1
                                 fi
                                 echo "Launching $JAR"
-                                nohup java -jar "$JAR" > app.log 2>&1 &
+                                java -jar "$JAR" &
                                 echo $! > app.pid
 
                                 echo "Waiting for app to become available on http://localhost:8080 ..."
@@ -585,7 +585,7 @@ EOF
                             // Run ZAP in Docker and scan the app via host.docker.internal
                             sh '''
                                 # Start ZAP in daemon mode on container port 8080, mapped to host port 8090 to avoid conflicts
-                                docker run -d --name zap -p 8090:8080 --add-host=host.docker.internal:host-gateway -i owasp/zap2docker-stable \
+                                docker run -d --name zap -p 8090:8080 --add-host=host.docker.internal:host-gateway -i zaproxy/zap-stable:2.16.1 \
                                   zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
 
                                 # Wait for ZAP to start
