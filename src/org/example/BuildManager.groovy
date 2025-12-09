@@ -181,38 +181,40 @@ EOF
         script.echo "Looking for artifacts matching: ${pattern}"
         
         try {
-            // Find files matching the pattern
-            def files = script.findFiles(glob: pattern)
-            
-            // Create artifact entries
-            files.each { file ->
-                def artifact = [
-                    name: file.name,
-                    path: file.path,
-                    size: file.length(),
-                    lastModified: new Date(file.lastModified())
-                ]
-                
-                // Add checksum if available
-                try {
-                    def checksum = script.sh(script: "sha256sum ${file.path} | cut -d' ' -f1", returnStdout: true).trim()
-                    artifact.checksum = checksum
-                } catch (Exception e) {
-                    script.echo "Warning: Failed to calculate checksum for ${file.name}: ${e.message}"
-                }
-                
-                artifacts << artifact
-                script.echo "Found artifact: ${file.path} (${file.length()} bytes)"
-            }
-        } catch (Exception e) {
-            script.echo "Warning: findFiles not available, using shell command"
-            // Fallback to shell command
+            // Use shell command to find files
             def jarFiles = script.sh(script: "find . -path '${pattern}' 2>/dev/null || true", returnStdout: true).trim()
+            
             if (jarFiles) {
                 jarFiles.split('\n').each { path ->
-                    artifacts << [name: path.split('/').last(), path: path]
+                    if (path) {
+                        def artifact = [
+                            name: path.split('/').last(),
+                            path: path
+                        ]
+                        
+                        // Add file size
+                        try {
+                            def size = script.sh(script: "stat -f%z '${path}' 2>/dev/null || stat -c%s '${path}' 2>/dev/null || echo 0", returnStdout: true).trim()
+                            artifact.size = size.toLong()
+                        } catch (Exception e) {
+                            script.echo "Warning: Failed to get size for ${path}: ${e.message}"
+                        }
+                        
+                        // Add checksum
+                        try {
+                            def checksum = script.sh(script: "sha256sum '${path}' 2>/dev/null | cut -d' ' -f1 || shasum -a 256 '${path}' 2>/dev/null | cut -d' ' -f1 || echo 'N/A'", returnStdout: true).trim()
+                            artifact.checksum = checksum
+                        } catch (Exception e) {
+                            script.echo "Warning: Failed to calculate checksum for ${path}: ${e.message}"
+                        }
+                        
+                        artifacts << artifact
+                        script.echo "Found artifact: ${path} (${artifact.size ?: 'unknown'} bytes)"
+                    }
                 }
             }
+        } catch (Exception e) {
+            script.echo "Error finding artifacts: ${e.message}"
         }
         
         if (artifacts.isEmpty()) {
