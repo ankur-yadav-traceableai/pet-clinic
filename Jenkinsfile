@@ -92,10 +92,7 @@ pipeline {
         APP_NAME = 'spring-petclinic'
         APP_VERSION = '3.1.0'
         
-        // SonarQube configuration
-        SONAR_HOST_URL = 'https://sonarcloud.io'
-        SONAR_ORGANIZATION = 'your-org'  // Update with your SonarCloud organization
-        
+
         // Docker configuration
         DOCKER_REGISTRY = 'docker.io'
         DOCKER_IMAGE = "${DOCKER_REGISTRY}/${APP_NAME}"
@@ -506,32 +503,7 @@ pipeline {
                         }
                     }
                     
-                    // SonarQube analysis (requires SonarQube server)
-                    withSonarQubeEnv('SonarQube') {
-                        if (params.BUILD_TOOL == 'maven') {
-                            sh 'mvn sonar:sonar ' +
-                               '-Dsonar.projectKey=spring-petclinic ' +
-                               "-Dsonar.projectName=${env.APP_NAME} " +
-                               "-Dsonar.projectVersion=${env.APP_VERSION} " +
-                               "-Dsonar.sources=src/main/java " +
-                               "-Dsonar.tests=src/test/java " +
-                               "-Dsonar.java.binaries=target/classes " +
-                               "-Dsonar.java.libraries=target/*.jar " +
-                               "-Dsonar.junit.reportPaths=target/surefire-reports,target/failsafe-reports " +
-                               "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
-                        } else {
-                            sh "./gradlew sonarqube --no-daemon " +
-                               "-Dsonar.projectKey=spring-petclinic " +
-                               "-Dsonar.projectName=${env.APP_NAME} " +
-                               "-Dsonar.projectVersion=${env.APP_VERSION} " +
-                               "-Dsonar.sources=src/main/java " +
-                               "-Dsonar.tests=src/test/java " +
-                               "-Dsonar.java.binaries=build/classes " +
-                               "-Dsonar.java.libraries=build/libs/*.jar " +
-                               "-Dsonar.junit.reportPaths=build/test-results/test,build/test-results/integrationTest " +
-                               "-Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml"
-                        }
-                    }
+
                 }
             }
         }

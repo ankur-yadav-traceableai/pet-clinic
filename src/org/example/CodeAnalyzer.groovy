@@ -42,9 +42,6 @@ class CodeAnalyzer implements Serializable {
                         case 'spotbugs':
                             results << runSpotBugs(config.spotbugsConfig)
                             break
-                        case 'sonarqube':
-                            runSonarQubeAnalysis(config.sonarConfig)
-                            break
                         default:
                             script.echo "Warning: Unknown analysis tool: ${tool}"
                     }
@@ -190,66 +187,7 @@ class CodeAnalyzer implements Serializable {
         ]
     }
     
-    /**
-     * Run SonarQube analysis
-     */
-    private void runSonarQubeAnalysis(Map config = [:]) {
-        script.echo "Running SonarQube analysis..."
-        
-        def sonarConfig = [
-            branch: config.branch ?: script.env.BRANCH_NAME ?: 'main',
-            projectKey: config.projectKey ?: script.env.SONAR_PROJECT_KEY,
-            projectName: config.projectName ?: script.env.SONAR_PROJECT_NAME,
-            projectVersion: config.projectVersion ?: script.env.BUILD_NUMBER,
-            sources: config.sources ?: 'src/main/java',
-            tests: config.tests ?: 'src/test/java',
-            javaBinaries: config.javaBinaries ?: 'target/classes',
-            javaLibraries: config.javaLibraries ?: 'target/*.jar',
-            exclusions: config.exclusions ?: '**/*Test.java,**/test/**/*.java',
-            jacocoReportPath: config.jacocoReportPath ?: 'target/jacoco.exec',
-            sourceEncoding: config.sourceEncoding ?: 'UTF-8',
-            language: config.language ?: 'java',
-            scmDisabled: config.scmDisabled ?: false
-        ]
-        
-        // Set up SonarQube scanner properties
-        def sonarProperties = [
-            "sonar.host.url=${config.serverUrl ?: script.env.SONAR_HOST_URL}",
-            "sonar.login=${config.login ?: script.env.SONAR_AUTH_TOKEN}",
-            "sonar.projectKey=${sonarConfig.projectKey}",
-            "sonar.projectName=${sonarConfig.projectName}",
-            "sonar.projectVersion=${sonarConfig.projectVersion}",
-            "sonar.sources=${sonarConfig.sources}",
-            "sonar.tests=${sonarConfig.tests}",
-            "sonar.java.binaries=${sonarConfig.javaBinaries}",
-            "sonar.java.libraries=${sonarConfig.javaLibraries}",
-            "sonar.exclusions=${sonarConfig.exclusions}",
-            "sonar.jacoco.reportPath=${sonarConfig.jacocoReportPath}",
-            "sonar.sourceEncoding=${sonarConfig.sourceEncoding}",
-            "sonar.language=${sonarConfig.language}",
-            "sonar.scm.disabled=${sonarConfig.scmDisabled}",
-            "sonar.scm.provider=git"
-        ]
-        
-        // Add branch analysis if not main branch
-        if (sonarConfig.branch != 'main' && sonarConfig.branch != 'master') {
-            sonarProperties << "sonar.branch.name=${sonarConfig.branch}"
-        }
-        
-        // Run SonarQube analysis
-        script.withSonarQubeEnv('SonarQube') {
-            if (script.fileExists('pom.xml')) {
-                script.sh "mvn sonar:sonar ${sonarProperties.collect { "-D$it" }.join(' ')}"
-            } else if (script.fileExists('build.gradle')) {
-                script.sh "./gradlew sonarqube ${sonarProperties.collect { "-D$it" }.join(' ')}"
-            } else {
-                // Use standalone scanner
-                script.withSonarQubeEnv('SonarQube') {
-                    script.sh "sonar-scanner ${sonarProperties.collect { "-D$it" }.join(' ')}"
-                }
-            }
-        }
-    }
+    // SonarQube analysis removed
     
     /**
      * Process and report analysis results
