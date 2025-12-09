@@ -1,0 +1,33 @@
+@Library('advanced-complex-lib@main') _
+
+pipeline {
+  agent any
+
+  stages {
+    stage('Run Shared Library Pipeline') {
+      steps {
+        script {
+          buildPipeline([
+            appName : 'spring-petclinic',
+            version : '3.1.0',
+            buildTool: 'maven',
+            scm     : [
+              url          : 'https://github.com/spring-projects/spring-petclinic.git',
+              branch       : '*/main',
+              credentialsId: ''
+            ],
+            testConfig: [
+              staticAnalysis  : [enabled: true]
+            ],
+            security: [
+              scan: [enabled: true, tools: ['owasp-zap']]
+            ],
+            artifacts: [
+              publish: true
+            ]
+          ])
+        }
+      }
+    }
+  }
+}
