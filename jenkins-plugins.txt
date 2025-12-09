@@ -1,0 +1,42 @@
+# Jenkins plugins required for this repository's pipelines
+# Lines are plugin IDs, one per line. You may optionally pin versions with :<version>
+# Example: git:5.2.1
+
+# =====================
+# Required (core usage)
+# =====================
+workflow-aggregator           # Pipeline
+pipeline-model-definition     # Declarative Pipeline
+scm-api                       # SCM API (dependency of Git)
+git                           # Git
+git-client                    # Git client
+credentials                   # Credentials
+credentials-binding           # Credentials Binding
+junit                         # JUnit test reports
+htmlpublisher                 # publishHTML step
+#pmd                           # PMD publisher
+checkstyle                    # Checkstyle publisher
+warnings-ng                   # Warnings Next Generation (recordIssues + spotBugs tool)
+dependency-check-jenkins-plugin  # OWASP Dependency-Check + publisher
+sonar                         # SonarQube Scanner for Jenkins (withSonarQubeEnv)
+jacoco                        # JaCoCo coverage publisher
+slack                         # Slack notifications
+
+# =====================================
+# Optional (used by features or library)
+# =====================================
+ws-cleanup                    # cleanWs step (we currently fallback to deleteDir)
+ansicolor                     # ansiColor('xterm') wrapper
+timestamper                   # timestamps() wrapper
+pipeline-utility-steps        # findFiles, writeJSON, readJSON utilities
+docker-workflow               # docker agent or docker.image(...).inside { }
+email-ext                     # emailext (used by shared Notifier)
+http_request                  # httpRequest (used by shared Notifier for Teams)
+cobertura                     # Only if you plan to publish Cobertura reports
+spotbugs                      # If you want native SpotBugs Gradle/Maven integration steps (optional)
+
+# Notes:
+# - After installation, configure SonarQube server (Manage Jenkins > System) for withSonarQubeEnv.
+# - Configure an OWASP Dependency-Check tool installation named exactly "Dependency-Check"
+#   (Manage Jenkins > Tools) to match the Jenkinsfile.
+# - Slack plugin requires a Workspace and Credential; optionally set a default channel.

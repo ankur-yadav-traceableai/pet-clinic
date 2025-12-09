@@ -111,6 +111,14 @@ pipeline {
         skipDefaultCheckout()
     }
     
+    // Jenkins-managed tools. Configure these names in Manage Jenkins > Global Tool Configuration.
+    tools {
+        // JDK 17 installation name (configure in Jenkins as 'jdk17' pointing to /usr/lib/jvm/java-1.17.0-openjdk-amd64 or similar)
+        jdk 'jdk17'
+        // Uncomment if you also configure a Maven installation in Jenkins (e.g., 'maven3')
+        // maven 'maven3'
+    }
+    
     stages {
         stage('Initialize') {
             steps {
