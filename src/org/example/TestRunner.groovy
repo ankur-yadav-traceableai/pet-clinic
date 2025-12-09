@@ -219,16 +219,3 @@ class TestRunner implements Serializable {
         }
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def testRunner = new TestRunner(this)
-    
-    if (binding.variables.get('testType') == 'unit') {
-        testRunner.runUnitTests(binding.variables.get('config') ?: [:]) 
-    } else if (binding.variables.get('testType') == 'integration') {
-        testRunner.runIntegrationTests(binding.variables.get('config') ?: [:]) 
-    } else {
-        testRunner.runUnitTests(binding.variables.get('config') ?: [:]) 
-    }
-}

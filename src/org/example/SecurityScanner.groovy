@@ -399,14 +399,7 @@ class SecurityScanner implements Serializable {
             critical: scanResults.sum { it.value.findings?.critical ?: 0 },
             high: scanResults.sum { it.value.findings?.high ?: 0 },
             medium: scanResults.sum { it.value.findings?.medium ?: 0 },
-            low: scanResults.sum { it.value.findings?.low ?: 0 },
-            total: scanResults.size()
+            low: scanResults.sum { it.value.findings?.low ?: 0 }
         ]
     }
-}
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def scanner = new SecurityScanner(this)
-    scanner.runScans(binding.variables.get('config') ?: [:]) 
 }

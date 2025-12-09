@@ -277,25 +277,3 @@ class Notifier implements Serializable {
         )
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def notifier = new Notifier(this)
-    def buildInfo = [
-        appName: 'TestApp',
-        version: '1.0.0',
-        buildNumber: '123',
-        branch: 'main',
-        commit: 'a1b2c3d4',
-        buildUrl: 'http://jenkins.example.com/job/test/123/'
-    ]
-    
-    if (binding.variables.get('status') == 'success') {
-        notifier.sendSuccess([enabled: true, channels: ['console']], buildInfo)
-    } else if (binding.variables.get('status') == 'failure') {
-        buildInfo.error = 'Test error message'
-        notifier.sendFailure([enabled: true, channels: ['console']], buildInfo)
-    } else {
-        notifier.sendUnstable([enabled: true, channels: ['console']], buildInfo)
-    }
-}

@@ -291,9 +291,3 @@ class CodeAnalyzer implements Serializable {
         }
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def analyzer = new CodeAnalyzer(this)
-    analyzer.runStaticAnalysis(binding.variables.get('config') ?: [:]) 
-}

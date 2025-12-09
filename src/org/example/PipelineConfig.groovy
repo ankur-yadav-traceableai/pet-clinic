@@ -207,8 +207,3 @@ class PipelineConfig implements Serializable {
         return stages.findAll { it.value != null }
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    return new PipelineConfig(binding.variables.get('config'))
-}

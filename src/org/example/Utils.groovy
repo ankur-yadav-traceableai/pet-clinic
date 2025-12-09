@@ -160,9 +160,3 @@ class Utils implements Serializable {
         return script.sh(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def utils = new Utils(this)
-    utils.printBuildInfo()
-}

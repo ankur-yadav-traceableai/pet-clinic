@@ -274,9 +274,3 @@ EOF
         ]
     }
 }
-
-// Support for direct script execution (for testing)
-if (runAsScript) {
-    def buildManager = new BuildManager(binding.variables.get('buildTool'), this)
-    return buildManager.build(binding.variables.get('config') ?: [:])
-}
