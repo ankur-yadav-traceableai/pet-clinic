@@ -128,14 +128,11 @@ class PipelineConfig implements Serializable {
     
     // Constructor with initial configuration
     PipelineConfig(Map config = [:]) {
-        // Merge provided config with defaults
-        this.metaClass.setProperties(config)
-        
         // Deep merge for nested maps
         config.each { key, value ->
-            if (value instanceof Map && this[key] instanceof Map) {
+            if (value instanceof Map && this.hasProperty(key) && this[key] instanceof Map) {
                 this[key] = this[key] + value  // Merge maps
-            } else if (hasProperty(key)) {
+            } else if (this.hasProperty(key)) {
                 this[key] = value
             }
         }
