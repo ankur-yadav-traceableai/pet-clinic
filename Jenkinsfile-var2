@@ -25,7 +25,7 @@ pipeline {
               staticAnalysis  : [enabled: true, tools: ['spotbugs']]
             ],
             security: [
-              scan: [enabled: true, tools: ['owasp-zap']]
+              scan: [enabled: true, tools: ['dependency-check']]
             ],
             artifacts: [
               publish: true
