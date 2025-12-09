@@ -3,6 +3,90 @@
 pipeline {
   agent any
 
+  parameters {
+    // Repository configuration
+    string(
+      name: 'GIT_REPO_URL',
+      defaultValue: 'https://github.com/spring-projects/spring-petclinic.git',
+      description: 'Git repository URL to build'
+    )
+    string(
+      name: 'GIT_BRANCH',
+      defaultValue: 'main',
+      description: 'Git branch to build from'
+    )
+    string(
+      name: 'GIT_CREDENTIALS_ID',
+      defaultValue: '',
+      description: 'Jenkins credentials ID for Git repository (leave empty for public repos)'
+    )
+    
+    // Build parameters
+    choice(
+      name: 'BUILD_TOOL',
+      choices: ['maven', 'gradle'],
+      description: 'Build tool to use'
+    )
+    
+    // Test parameters
+    booleanParam(
+      name: 'RUN_UNIT_TESTS',
+      defaultValue: true,
+      description: 'Run unit tests'
+    )
+    booleanParam(
+      name: 'RUN_INTEGRATION_TESTS',
+      defaultValue: false,
+      description: 'Run integration tests'
+    )
+    
+    // Code quality parameters
+    booleanParam(
+      name: 'RUN_CODE_ANALYSIS',
+      defaultValue: true,
+      description: 'Run static code analysis'
+    )
+    booleanParam(
+      name: 'SKIP_BUILD_STATIC_CHECKS',
+      defaultValue: true,
+      description: 'Skip Checkstyle/PMD/SpotBugs during the Build stage; Code Quality stage will still run reports'
+    )
+    booleanParam(
+      name: 'RUN_SECURITY_SCAN',
+      defaultValue: true,
+      description: 'Run security scans'
+    )
+    booleanParam(
+      name: 'GENERATE_DOCS',
+      defaultValue: false,
+      description: 'Generate API documentation'
+    )
+    
+    // Notifications
+    booleanParam(
+      name: 'DISABLE_NOTIFICATIONS',
+      defaultValue: false,
+      description: 'Disable post-build notifications (e.g., Slack)'
+    )
+    string(
+      name: 'SLACK_CHANNEL',
+      defaultValue: '#builds',
+      description: 'Slack channel to send notifications (e.g., #builds). Leave blank to use Jenkins default.'
+    )
+    
+    // Advanced options
+    booleanParam(
+      name: 'PARALLEL_BUILD',
+      defaultValue: true,
+      description: 'Enable parallel build where possible'
+    )
+    string(
+      name: 'BUILD_ARGS',
+      defaultValue: '',
+      description: 'Additional build arguments'
+    )
+  }
+
   tools {
     jdk 'jdk17'
   }
@@ -14,35 +98,35 @@ pipeline {
           buildPipeline([
             appName : 'spring-petclinic',
             version : '3.1.0',
-            buildTool: 'maven',
+            buildTool: params.BUILD_TOOL,
             scm     : [
-              url          : 'https://github.com/spring-projects/spring-petclinic.git',
-              branch       : '*/main',
-              credentialsId: ''
+              url          : params.GIT_REPO_URL,
+              branch       : "*/${params.GIT_BRANCH}",
+              credentialsId: params.GIT_CREDENTIALS_ID
             ],
             buildConfig: [
-              parallel: true,
-              skipBuildStaticChecks: true,
-              generateDocs: false,
-              buildArgs: []
+              parallel: params.PARALLEL_BUILD,
+              skipBuildStaticChecks: params.SKIP_BUILD_STATIC_CHECKS,
+              generateDocs: params.GENERATE_DOCS,
+              buildArgs: params.BUILD_ARGS ? params.BUILD_ARGS.split(',').collect { it.trim() } : []
             ],
             testConfig: [
               unitTests       : [
-                enabled: true,
-                parallel: true,
+                enabled: params.RUN_UNIT_TESTS,
+                parallel: params.PARALLEL_BUILD,
                 forkCount: 1
               ],
               integrationTests: [
-                enabled: false
+                enabled: params.RUN_INTEGRATION_TESTS
               ],
               staticAnalysis  : [
-                enabled: true,
+                enabled: params.RUN_CODE_ANALYSIS,
                 tools: ['checkstyle', 'pmd', 'spotbugs']
               ]
             ],
             security: [
               scan: [
-                enabled: true, 
+                enabled: params.RUN_SECURITY_SCAN, 
                 tools: ['dependency-check', 'owasp-zap', 'trivy'],
                 failOnVulnerability: false
               ]
@@ -51,9 +135,12 @@ pipeline {
               publish: true
             ],
             notifications: [
-              onSuccess: true,
-              onFailure: true,
-              channels : ['console']
+              onSuccess: !params.DISABLE_NOTIFICATIONS,
+              onFailure: !params.DISABLE_NOTIFICATIONS,
+              channels : ['console'],
+              slack: [
+                channel: params.SLACK_CHANNEL
+              ]
             ]
           ])
         }

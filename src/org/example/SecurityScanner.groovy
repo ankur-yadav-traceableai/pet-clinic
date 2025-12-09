@@ -33,16 +33,16 @@ class SecurityScanner implements Serializable {
                 try {
                     switch (tool.toLowerCase()) {
                         case 'dependency-check':
-                            runDependencyCheck(config.dependencyCheck)
+                            runDependencyCheck(config?.dependencyCheck ?: [:])
                             break
                         case 'owasp-zap':
-                            runOwaspZap(config.owaspZap)
+                            runOwaspZap(config?.owaspZap ?: [:])
                             break
                         case 'snyk':
-                            runSnykScan(config.snyk)
+                            runSnykScan(config?.snyk ?: [:])
                             break
                         case 'trivy':
-                            runTrivyScan(config.trivy)
+                            runTrivyScan(config?.trivy ?: [:])
                             break
                         default:
                             script.echo "Warning: Unknown security tool: ${tool}"
@@ -68,8 +68,8 @@ class SecurityScanner implements Serializable {
     private void runDependencyCheck(Map config = [:]) {
         script.echo "Running OWASP Dependency-Check..."
         
-        def reportDir = config.reportDir ?: 'target/dependency-check'
-        def reportFile = config.reportFile ?: 'dependency-check-report.html'
+        def reportDir = config?.reportDir ?: 'target/dependency-check'
+        def reportFile = config?.reportFile ?: 'dependency-check-report.html'
         
         // Install if not available
         if (!script.tool('Dependency-Check')) {
@@ -87,7 +87,7 @@ class SecurityScanner implements Serializable {
             '--out', reportDir,
             '--format', 'HTML', 'JSON', 'XML',
             '--enableExperimental',
-            '--failOnCVSS', config.failOnCVSS ?: '7'
+            '--failOnCVSS', config?.failOnCVSS ?: '7'
         ]
         
         // Add suppression file if exists
@@ -219,14 +219,14 @@ class SecurityScanner implements Serializable {
     private void runSnykScan(Map config = [:]) {
         script.echo "Running Snyk security scan..."
         
-        def snykToken = config.token ?: script.env.SNYK_TOKEN
+        def snykToken = config?.token ?: script.env.SNYK_TOKEN
         if (!snykToken) {
             script.echo "Warning: Snyk token not provided. Skipping Snyk scan."
             return
         }
         
-        def reportDir = config.reportDir ?: 'target/snyk'
-        def reportFile = config.reportFile ?: 'snyk-report.html'
+        def reportDir = config?.reportDir ?: 'target/snyk'
+        def reportFile = config?.reportFile ?: 'snyk-report.html'
         
         // Install Snyk if not available
         if (!script.sh(script: 'which snyk', returnStatus: true)) {
@@ -239,15 +239,15 @@ class SecurityScanner implements Serializable {
             script.sh "snyk auth ${snykToken}"
             
             // Test for vulnerabilities
-            script.sh "snyk test --severity-threshold=${config.severityThreshold ?: 'high'} --json > ${reportDir}/snyk-test.json || true"
+            script.sh "snyk test --severity-threshold=${config?.severityThreshold ?: 'high'} --json > ${reportDir}/snyk-test.json || true"
             
             // Monitor project
-            if (config.monitor) {
+            if (config?.monitor) {
                 script.sh "snyk monitor"
             }
             
             // Generate HTML report
-            script.sh "snyk test --severity-threshold=${config.severityThreshold ?: 'high'} --file=${reportDir}/${reportFile} --format=html || true"
+            script.sh "snyk test --severity-threshold=${config?.severityThreshold ?: 'high'} --file=${reportDir}/${reportFile} --format=html || true"
             
             // Publish HTML report
             script.publishHTML([
@@ -282,7 +282,7 @@ class SecurityScanner implements Serializable {
             return
         }
         
-        def appName = config.appName ?: script.env.APP_NAME ?: 'spring-petclinic'
+        def appName = config?.appName ?: script.env.APP_NAME ?: 'spring-petclinic'
         def imageName = "${appName}:latest"
         
         script.sh """
