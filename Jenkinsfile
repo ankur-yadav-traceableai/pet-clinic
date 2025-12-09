@@ -569,12 +569,12 @@ EOF
                                   exit 1
                                 fi
                                 echo "Launching $JAR"
-                                java -jar "$JAR" &
+                                nohup java -jar -Dserver.port=9090 "$JAR" > app.log 2>&1 &
                                 echo $! > app.pid
 
                                 echo "Waiting for app to become available on http://localhost:8080 ..."
                                 for i in $(seq 1 60); do
-                                  if curl -sf http://localhost:8080/ >/dev/null 2>&1; then
+                                  if curl -sf http://localhost:9090/ >/dev/null 2>&1; then
                                     echo "App is up"
                                     break
                                   fi
@@ -595,11 +595,16 @@ EOF
                                 done
 
                                 # Run a quick scan against the app running on the host
-                                docker exec zap zap-cli -p 8080 quick-scan -s all -r http://host.docker.internal:8080/
+                                docker exec zap \
+                                    zap-api-scan.py \
+                                    -t http://host.docker.internal:9090/ \
+                                    -f openapi \
+                                    -r /zap/report.html \
+                                    -d
+
 
                                 # Generate report
                                 mkdir -p reports/zap
-                                docker exec zap zap-cli -p 8080 report -o /zap/report.html -f html
                                 docker cp zap:/zap/report.html reports/zap/
                             '''
                         } finally {
