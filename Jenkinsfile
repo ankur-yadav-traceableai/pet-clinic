@@ -279,7 +279,7 @@ pipeline {
 
                         # Generate Dockerfile
                         cat > Dockerfile <<'EOF'
-FROM openjdk:17-jdk-slim
+FROM openjdk:17-ea-oraclelinux7
 WORKDIR /
 COPY app.jar /app.jar
 EXPOSE 8080
