@@ -627,7 +627,7 @@ EOF
                     if (fileExists('Dockerfile')) {
                         sh '''
                             mkdir -p reports/trivy
-                            trivy image --severity CRITICAL --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o reports/trivy/trivy-report.html spring-petclinic:latest || true
+                            /usr/bin/trivy image --severity CRITICAL --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o reports/trivy/trivy-report.html spring-petclinic:latest || true
                         '''
                         
                         // Publish Trivy report
