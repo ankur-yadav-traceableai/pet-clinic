@@ -539,7 +539,7 @@ pipeline {
                             done
                             
                             # Run a quick scan (replace localhost:8080 with your app's URL)
-                            docker exec zap zap-cli -p 8080 quick-scan -s all -r http://localhost:8080/
+                            docker exec zap zap-cli -p 8080 quick-scan -s all -r http://host.docker.internal:8080/
                             
                             # Generate report
                             mkdir -p reports/zap
@@ -593,22 +593,23 @@ pipeline {
                 script {
                     if (params.BUILD_TOOL == 'maven') {
 
+                        def docArgs = []
                         if (params.SKIP_BUILD_STATIC_CHECKS) {
-                                                    itArgs += [
-                                                        '-Dcheckstyle.skip=true',
-                                                        '-Dpmd.skip=true',
-                                                        '-Dspotbugs.skip=true',
-                                                        '-Dcheckstyle.failOnViolation=false',
-                                                        '-Dpmd.failOnViolation=false',
-                                                        '-Dspotbugs.failOnError=false',
-                                                        '-Dnohttp.skip=true',
-                                                        '-Dnohttp.check.skip=true',
-                                                        '-DskipChecks',
-                                                        '-Dnohttp=false'
-                                                    ]
-                                                }
+                            docArgs += [
+                                '-Dcheckstyle.skip=true',
+                                '-Dpmd.skip=true',
+                                '-Dspotbugs.skip=true',
+                                '-Dcheckstyle.failOnViolation=false',
+                                '-Dpmd.failOnViolation=false',
+                                '-Dspotbugs.failOnError=false',
+                                '-Dnohttp.skip=true',
+                                '-Dnohttp.check.skip=true',
+                                '-DskipChecks',
+                                '-Dnohttp=false'
+                            ]
+                        }
                         // Generate Javadoc
-                        sh 'mvn javadoc:javadoc ${itArgs.join(' ')}'
+                        sh "mvn javadoc:javadoc ${docArgs.join(' ')}"
                         
                         // Generate API documentation (if using Spring REST Docs or similar)
                         if (fileExists('src/test/java/org/springframework/samples/petclinic/api')) {
