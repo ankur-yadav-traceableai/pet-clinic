@@ -22,7 +22,7 @@ pipeline {
             ],
             testConfig: [
               unitTests       : [enabled: false],
-              staticAnalysis  : [enabled: true]
+              staticAnalysis  : [enabled: true, tools: ['spotbugs']]
             ],
             security: [
               scan: [enabled: true, tools: ['owasp-zap']]
