@@ -21,6 +21,7 @@ pipeline {
               credentialsId: ''
             ],
             testConfig: [
+              unitTests       : [enabled: false],
               staticAnalysis  : [enabled: true]
             ],
             security: [

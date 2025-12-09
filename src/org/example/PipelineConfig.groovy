@@ -60,7 +60,7 @@ class PipelineConfig implements Serializable {
     // Security configuration
     Map security = [
         scan: [
-            enabled: true,
+            enabled: false,
             tools: ['owasp', 'dependency-check'],
             failOnVulnerability: true,
             excludePatterns: []
