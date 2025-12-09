@@ -382,24 +382,58 @@ pipeline {
                     // Run PMD
                     if (params.BUILD_TOOL == 'maven') {
                         sh 'mvn pmd:pmd pmd:cpd'
-                        step([
-                            $class: 'WarningsPublisher',
-                            canRunOnFailed: true,
-                            parserConfigurations: [
-                                [$class: 'ParserConfiguration', pattern: '**/target/pmd.xml', parserName: 'PMD'],
-                                [$class: 'ParserConfiguration', pattern: '**/target/cpd.xml', parserName: 'CPD']
-                            ]
-                        ])
+                        // Archive XML reports as a fallback
+                        archiveArtifacts artifacts: '**/target/pmd.xml,**/target/cpd.xml', allowEmptyArchive: true
+                        // Publish HTML reports if generated via Maven Site
+                        if (fileExists('target/site/pmd.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'target/site',
+                                reportFiles: 'pmd.html',
+                                reportName: 'PMD Report',
+                                reportTitles: 'PMD'
+                            ])
+                        }
+                        if (fileExists('target/site/cpd.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'target/site',
+                                reportFiles: 'cpd.html',
+                                reportName: 'CPD Report',
+                                reportTitles: 'CPD'
+                            ])
+                        }
                     } else {
                         sh './gradlew pmdMain pmdTest cpdCheck --no-daemon'
-                        step([
-                            $class: 'WarningsPublisher',
-                            canRunOnFailed: true,
-                            parserConfigurations: [
-                                [$class: 'ParserConfiguration', pattern: '**/build/reports/pmd/*.xml', parserName: 'PMD'],
-                                [$class: 'ParserConfiguration', pattern: '**/build/reports/cpd/*.xml', parserName: 'CPD']
-                            ]
-                        ])
+                        // Archive XML reports as a fallback
+                        archiveArtifacts artifacts: '**/build/reports/pmd/*.xml,**/build/reports/cpd/*.xml', allowEmptyArchive: true
+                        // Publish HTML reports if available
+                        if (fileExists('build/reports/pmd/main.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'build/reports/pmd',
+                                reportFiles: 'main.html',
+                                reportName: 'PMD Report',
+                                reportTitles: 'PMD'
+                            ])
+                        }
+                        if (fileExists('build/reports/cpd/index.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'build/reports/cpd',
+                                reportFiles: 'index.html',
+                                reportName: 'CPD Report',
+                                reportTitles: 'CPD'
+                            ])
+                        }
                     }
                     
                     // Run Checkstyle
@@ -544,8 +578,23 @@ pipeline {
             steps {
                 script {
                     if (params.BUILD_TOOL == 'maven') {
+
+                        if (params.SKIP_BUILD_STATIC_CHECKS) {
+                                                    itArgs += [
+                                                        '-Dcheckstyle.skip=true',
+                                                        '-Dpmd.skip=true',
+                                                        '-Dspotbugs.skip=true',
+                                                        '-Dcheckstyle.failOnViolation=false',
+                                                        '-Dpmd.failOnViolation=false',
+                                                        '-Dspotbugs.failOnError=false',
+                                                        '-Dnohttp.skip=true',
+                                                        '-Dnohttp.check.skip=true',
+                                                        '-DskipChecks',
+                                                        '-Dnohttp=false'
+                                                    ]
+                                                }
                         // Generate Javadoc
-                        sh 'mvn javadoc:javadoc'
+                        sh 'mvn javadoc:javadoc ${itArgs.join(' ')}'
                         
                         // Generate API documentation (if using Spring REST Docs or similar)
                         if (fileExists('src/test/java/org/springframework/samples/petclinic/api')) {
