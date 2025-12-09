@@ -436,32 +436,74 @@ pipeline {
                         }
                     }
                     
-                    // Run Checkstyle
+                    // Run Checkstyle (publish via HTML + archive, no plugin dependency)
                     if (params.BUILD_TOOL == 'maven') {
                         sh 'mvn checkstyle:checkstyle'
-                        checkstyle canRunOnFailed: true, 
-                                 defaultEncoding: 'UTF-8',
-                                 pattern: '**/target/checkstyle-result.xml'
+                        // Archive XML
+                        archiveArtifacts artifacts: '**/target/checkstyle-result.xml', allowEmptyArchive: true
+                        // Publish HTML if available (via Maven Site)
+                        if (fileExists('target/site/checkstyle.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'target/site',
+                                reportFiles: 'checkstyle.html',
+                                reportName: 'Checkstyle Report',
+                                reportTitles: 'Checkstyle'
+                            ])
+                        }
                     } else {
                         sh './gradlew checkstyleMain checkstyleTest --no-daemon'
-                        checkstyle canRunOnFailed: true, 
-                                 defaultEncoding: 'UTF-8',
-                                 pattern: '**/build/reports/checkstyle/*.xml'
+                        // Archive XML
+                        archiveArtifacts artifacts: '**/build/reports/checkstyle/*.xml', allowEmptyArchive: true
+                        // Publish HTML if available
+                        if (fileExists('build/reports/checkstyle/main.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'build/reports/checkstyle',
+                                reportFiles: 'main.html',
+                                reportName: 'Checkstyle Report',
+                                reportTitles: 'Checkstyle'
+                            ])
+                        }
                     }
                     
-                    // Run SpotBugs (free alternative to FindBugs)
+                    // Run SpotBugs (publish via HTML + archive, no plugin dependency)
                     if (params.BUILD_TOOL == 'maven') {
                         sh 'mvn spotbugs:spotbugs'
-                        recordIssues(
-                            enabledForFailure: true,
-                            tool: spotBugs(pattern: '**/target/spotbugsXml.xml')
-                        )
+                        // Archive XML
+                        archiveArtifacts artifacts: '**/target/spotbugsXml.xml', allowEmptyArchive: true
+                        // Publish HTML if available (via Maven Site)
+                        if (fileExists('target/site/spotbugs.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'target/site',
+                                reportFiles: 'spotbugs.html',
+                                reportName: 'SpotBugs Report',
+                                reportTitles: 'SpotBugs'
+                            ])
+                        }
                     } else {
                         sh './gradlew spotbugsMain spotbugsTest --no-daemon'
-                        recordIssues(
-                            enabledForFailure: true,
-                            tool: spotBugs(pattern: '**/build/reports/spotbugs/*.xml')
-                        )
+                        // Archive XML
+                        archiveArtifacts artifacts: '**/build/reports/spotbugs/*.xml', allowEmptyArchive: true
+                        // Publish HTML if available
+                        if (fileExists('build/reports/spotbugs/main.html')) {
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'build/reports/spotbugs',
+                                reportFiles: 'main.html',
+                                reportName: 'SpotBugs Report',
+                                reportTitles: 'SpotBugs'
+                            ])
+                        }
                     }
                     
                     // SonarQube analysis (requires SonarQube server)
